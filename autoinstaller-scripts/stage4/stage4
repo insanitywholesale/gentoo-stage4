@@ -7,10 +7,11 @@ clear
 BASE_URL="https://github.com/asarubbo/gentoo-stage4/raw/master"
 
 ####### USER CONFIGS
-#TYPE="uefi"
+TYPE="uefi"
 #TYPE="bios"
-#STAGE4_URL="${BASE_URL}/archives/standard/stage4-standard-20190512.tar.xz"
-#STAGE4_URL="${BASE_URL}/archives/hardened/stage4-hardened-20190512.tar.xz"
+TARBALL=`curl http://ftp.ntua.gr/pub/linux/gentoo/releases/amd64/autobuilds/latest-stage4-amd64-minimal.txt | egrep '^2' | grep -o '^\S*'`
+#TARBALL=`curl http://ftp.ntua.gr/pub/linux/gentoo/releases/amd64/autobuilds/latest-stage4-amd64-hardened+minimal.txt | egrep '^2' | grep -o '^\S*'`
+STAGE4_URL="http://ftp.ntua.gr/pub/linux/gentoo/releases/amd64/autobuilds/${TARBALL}"
 
 DISK="/dev/sda"
 ESP="/dev/sda1"
@@ -55,9 +56,9 @@ function die () {
 }
 
 # DATE/NTP
-rm -fr /etc/localtime
-curl -s -q -L "${LOCALTIME_URL}" --output /etc/localtime
-ntpdate -b time.ien.it > /dev/null 2>&1 && hwclock -w
+#rm -fr /etc/localtime
+#curl -s -q -L "${LOCALTIME_URL}" --output /etc/localtime
+ntpdate -s -b -u 0.gentoo.pool.ntp.org > /dev/null 2>&1 && hwclock -w
 
 # CLEAN THE DISK
 dd if=/dev/zero of="${DISK}" bs=512 count=1 conv=notrunc > /dev/null 2>&1 || die
@@ -74,18 +75,20 @@ mkdir -p "${MOUNTPOINT}"/boot || die
 mount "${BOOT}" "${MOUNTPOINT}"/boot || die
 cd "${MOUNTPOINT}" || die
 echo "DOWNLOAD IN PROGRESS..."
-curl -s -q -L "${STAGE4_URL}" --output stage4.tar.xz || die
+TARBALL=`curl http://ftp.ntua.gr/pub/linux/gentoo/releases/amd64/autobuilds/latest-stage4-amd64-minimal.txt | egrep '^2' | grep -o '^\S*'`
+curl -o /mnt/gentoo/stage3.tar.bz2 http://ftp.ntua.gr/pub/linux/gentoo/releases/amd64/autobuilds/$TARBALL
+#curl -s -q -L "${STAGE4_URL}" --output stage4.tar.xz || die
 echo "DOWNLOAD DONE..."
 echo "DECOMPRESSION IN PROGRESS..."
-tar -xJpf stage4.tar.xz || die
+cd /mnt/gentoo && tar -xJpf stage4.tar.xz || die
 echo "DECOMPRESSION DONE..."
 rm -fr stage4.tar.xz || die
 
-
 ####
 sed "s:j4:j$( nproc ):" -i etc/portage/make.conf
-sed "s:BOOT:$BOOT:" -i etc/fstab || die
-sed "s:ROOT:$ROOT:" -i etc/fstab etc/default/grub || die
+#sed "s:BOOT:$BOOT:" -i etc/fstab || die
+#sed "s:ROOT:$ROOT:" -i etc/fstab etc/default/grub || die
+(curl -o mkfstab https://github.com/insanitywholesale/installscripts/blob/master/generatefilesystable | bash) && bash -c './mkfstab -U "${MOUNTPOINT}" > "${MOUNTPOINT}"/etc/fstab'
 if [ ! -z "$( lsblk --discard "${DISK}" | awk '{print $3}' | grep "0B" )" ]
 then
 	sed "s:,discard::g" -i etc/fstab || die
@@ -119,7 +122,7 @@ then
 fi
 
 chroot "${MOUNTPOINT}" /bin/bash -c 'PATH="/usr/sbin:/usr/bin:/sbin:/bin" grub2-mkconfig -o /boot/grub/grub.cfg' || die
-chroot "${MOUNTPOINT}" /bin/bash -c 'PATH="/usr/sbin:/usr/bin:/sbin:/bin" echo "root:changeme999" | chpasswd' || die
+chroot "${MOUNTPOINT}" /bin/bash -c 'PATH="/usr/sbin:/usr/bin:/sbin:/bin" echo "root:fail" | chpasswd' || die
 
 rm -fr root/.ssh/authorized_keys || die
 
